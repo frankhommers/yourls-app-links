@@ -1,0 +1,43 @@
+<?php
+declare(strict_types=1);
+define('YOURLS_ABSPATH', __DIR__);
+define('YOURLS_SITE', 'https://links.example');
+require __DIR__.'/yourls-stubs.php';
+require __DIR__.'/../open-links/plugin.php';
+$state['authenticated']=true;
+require __DIR__.'/run.php';
+use HmmOpen\Templates;
+use HmmOpen\Router;
+$base=['label'=>'Example','path'=>'{workspace}/{item...}','uri'=>'example://open?space={workspace}&item={item}'];
+$r=new Router(Templates::compile(['example'=>$base]));
+same($r->resolve('example/Team%20A/Folder/Caf%C3%A9%20%26%20tea'), 'example://open?space=Team%20A&item=Folder%2FCaf%C3%A9%20%26%20tea');
+same($r->simplify('example://open?item=Folder%2FNote&space=Team+A'), 'example/Team%20A/Folder/Note');
+foreach (['example://open?space=a&item=b&extra=true','example://open?space=a&space=b&item=c','example://open?space=a&item=..','example://open?space=a&item=a%2F%2Fb','example://open?space=a&item=x#heading'] as $uri) same($r->resolve($r->simplify($uri)),$uri);
+foreach ([['uri'=>'javascript:{workspace}:{item}'],['path'=>'{workspace}/{missing}'],['path'=>'{workspace}/{workspace}'],['path'=>'{workspace...}/{item}'],['path'=>'../{workspace}/{item}'],['path'=>'{workspace}[/{item...}]'],['uri'=>'example:{workspace}{item}'],['uri'=>'example:?space={workspace}&space={item}'],['constraints'=>['missing'=>'alphanumeric']],['constraints'=>['workspace'=>'arbitrary-regex']]] as $change) rejects(fn()=>Templates::compile(['example'=>array_replace($base,$change)]));
+$defs=Templates::presets();$defs['example']=$base;
+$rows=[];foreach($defs as $key=>$d)$rows[]=['key'=>$key]+$d+['constraints'=>'{}'];
+// POST constraints are text, including for presets.
+foreach($rows as &$row)$row['constraints']=is_array($row['constraints'])?json_encode((object)$row['constraints']):$row['constraints'];unset($row);
+hmm_open_save_templates($rows);
+same(hmm_open_link('example://open?space=Team&item=Folder%2FNote'),'https://links.example/example/Team/Folder/Note');
+$_REQUEST=['uri'=>'example://open?space=Team&item=Note'];same(hmm_open_api_convert()['url'],'https://links.example/example/Team/Note');
+$_REQUEST=['url'=>'https://links.example/example/Team/Note'];same(hmm_open_api_resolve()['uri'],'example://open?space=Team&item=Note');
+same(hmm_open_api_apps()['apps'][3]['uri_template'],$base['uri']);
+$before=hmm_open_app_templates();$invalid=$rows;$invalid[3]['uri']='https://example.com/{workspace}/{item}';rejects(fn()=>hmm_open_save_templates($invalid));same(hmm_open_app_templates(),$before);
+yourls_update_option('hmm_open_routes',['gateways'=>['_'],'primary'=>'_','direct'=>['example'=>'x'],'prefer_direct'=>true]);
+same(hmm_open_link('example://open?space=Team&item=Note'),'https://links.example/x/Team/Note');
+$remove=$rows;$remove[3]['remove']='1';hmm_open_save_templates($remove);same(isset(hmm_open_routes()['direct']['example']),false);
+ob_start();hmm_open_templates_form([['key'=>'bad','label'=>'<script>alert(1)</script>','path'=>'{id}','uri'=>'example:{id}','constraints'=>'{}']]);$html=ob_get_clean();same(str_contains($html,'<script>'),false);same(str_contains($html,'&lt;script&gt;'),true);
+echo "$count total router and template checks passed.\n";
+
+$rows[3]['direct']='example';
+hmm_open_save_templates($rows);
+same(hmm_open_link('example://open?space=Team&item=Note'),'https://links.example/example/Team/Note');
+$before=$state['options'];
+$collision=$rows;$collision[3]['direct']='_';rejects(fn()=>hmm_open_save_templates($collision));same($state['options'],$before);
+yourls_insert_link_in_db('https://example.org','taken');
+$collision[3]['direct']='taken';rejects(fn()=>hmm_open_save_templates($collision));same($state['options'],$before);
+$rows[3]['direct']='';hmm_open_save_templates($rows);same(hmm_open_routes()['direct']['example'],'example');
+ob_start();hmm_open_routes_form();$gateways=ob_get_clean();same(str_contains($gateways,'name="direct['),false);
+ob_start();hmm_open_templates_form();$apps=ob_get_clean();same(str_contains($apps,'name="apps[0][direct]"'),true);
+echo "Direct route placement and save checks passed.\n";

@@ -1,0 +1,12 @@
+# Hosting backups and deployment files may contain credentials and private links.
+/backups/
+/.deploy/
+/dist/
+.DS_Store
+__pycache__/
+*.py[cod]
+.env
+.env.*
+*.sql
+*.sql.gz
+*.pem
