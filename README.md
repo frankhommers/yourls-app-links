@@ -137,6 +137,6 @@ Push a version tag matching `plugin.php`, such as `v0.8.4`, to publish a GitHub
 release after all checks pass. Branch builds also provide a downloadable workflow
 artifact. Workflows never deploy to a hosting account or access hosting credentials.
 
-This repository is private while the distribution license is being selected.
+This repository is public. The distribution license is still being selected.
 Hosting backups, deployment helpers, credentials and generated archives are excluded
 from version control. No open-source license is granted yet.
